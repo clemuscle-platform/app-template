@@ -4,6 +4,7 @@
 #   2. deploy/ avec l'image remplacée par son DIGEST ;
 #   3. artefact OCI ghcr.io/<org>/<app>-deploy:<TAG> (Flux le déploie selon le tag) ;
 #   4. signature cosign keyless de l'image et de l'artefact (CI uniquement : identité OIDC GitHub).
+# Options : SCAN=true (trivy image avant l'artefact), SIGN=true (cosign), PLATFORMS, ALLOW_DIRTY=1.
 # Tags d'artefact : pr-<n> (préversion), main (staging), X.Y.Z (production).
 # Usage : TAG=main scripts/publish.sh     (prérequis : docker login ghcr.io, buildx, flux, kustomize)
 set -euo pipefail
@@ -33,6 +34,12 @@ docker buildx build --platform "$PLATFORMS" -f "$DOCKERFILE" \
 DIGEST=$(jq -r '."containerimage.digest"' out/build-metadata.json)
 echo "digest : $DIGEST"
 
+# L'artefact (donc le déploiement) n'est publié que si l'image passe le scan.
+if [[ "${SCAN:-false}" == true ]]; then
+  echo "== trivy image (HIGH/CRITICAL corrigeables bloquants)"
+  trivy image --quiet --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$IMAGE@$DIGEST"
+fi
+
 echo "== artefact deploy/ → oci://$IMAGE-deploy:$TAG"
 WORK=$(mktemp -d -p out)
 cp -r deploy "$WORK/"
@@ -42,7 +49,7 @@ done
 flux push artifact "oci://$IMAGE-deploy:$TAG" \
   --path="$WORK/deploy" \
   --source="$(git config --get remote.origin.url || echo "https://github.com/$ORG/$APP")" \
-  --revision="$(git rev-parse --abbrev-ref HEAD)@sha1:$SHA" \
+  --revision="${GITHUB_REF_NAME:-$(git rev-parse --abbrev-ref HEAD)}@sha1:$SHA" \
   --annotations="org.opencontainers.image.version=$VERSION" \
   --output=json > out/artifact.json
 ARTIFACT_DIGEST=$(jq -r '.digest' out/artifact.json)
