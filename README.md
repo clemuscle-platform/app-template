@@ -3,12 +3,16 @@
 Application de la plateforme `clemuscle-platform`, créée depuis le modèle **app-template**.
 
 ## Démarrer une nouvelle application
-1. Sur GitHub : *Use this template*, puis créer le dépôt `clemuscle-platform/<nom>` (privé).
-2. Initialiser le dépôt : `scripts/init.sh <nom> web|api|static`, puis `make setup test` et un commit.
-   Puis définir les deux secrets de la CI **sur le dépôt** (le plan Free ne transmet pas les secrets d'organisation aux dépôts privés) : `gh secret set PLATFORM_CI_CLIENT_ID -R clemuscle-platform/<nom>` et `gh secret set PLATFORM_CI_APP_PRIVATE_KEY -R clemuscle-platform/<nom> < platform-ci-app.pem` (GitHub App `clemuscle-platform-ci`, installée sur `infra` seulement).
-3. Activer les modules voulus dans `platform.yaml`, puis lancer `make modules`.
-4. Déclarer l'application dans le dépôt `infra` : copier `cluster/apps/hello.yaml` en `cluster/apps/<nom>.yaml` et l'ajouter à `cluster/apps/kustomization.yaml`. Cette PR demande une validation humaine (runbook *ajout d'une application*).
-5. Pousser sur `main` : la CI publie l'artefact `main`, et Flux déploie le staging.
+Depuis le dépôt `infra`, avec l'identité du bot (`clemuscle-platform-bot`) :
+```bash
+make new-app NAME=<nom> KIND=web|api|static
+```
+Le script crée le dépôt public depuis ce modèle, pose les secrets de CI, initialise le code (`scripts/init.sh`),
+applique les garde-fous GitHub, puis ouvre la PR de déclaration sur `infra`. Cette PR est la seule étape
+qui demande une relecture humaine. Après sa fusion, Flux déploie le staging.
+
+Ensuite, tout passe par des PR sur le dépôt de l'application : les modules s'activent dans `platform.yaml`
+(`make modules`), la CI teste puis fusionne seule, et une étiquette `vX.Y.Z` met en production.
 
 ## Arborescence
 
